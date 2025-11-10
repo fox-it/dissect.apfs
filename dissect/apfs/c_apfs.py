@@ -1,3 +1,7 @@
+# Resources:
+# - https://developer.apple.com/support/downloads/Apple-File-System-Reference.pdf
+# - https://github.com/sgan81/apfs-fuse
+# - https://github.com/linux-apfs/linux-apfs-rw
 from dissect.cstruct import cstruct
 
 apfs_def = """

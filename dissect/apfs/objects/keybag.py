@@ -179,7 +179,7 @@ class KEK(Sequence):
         )
 
     def unwrap(self, password: str) -> bytes:
-        """Unwrap the KEK using the given key."""
+        """Unwrap the KEK using the given password."""
         blob = self["blob"]
         key = hashlib.pbkdf2_hmac(
             "sha256",

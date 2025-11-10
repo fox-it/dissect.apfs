@@ -25,6 +25,7 @@ if TYPE_CHECKING:
     from collections.abc import Iterator
     from datetime import datetime
 
+    from dissect.apfs.objects.btree_node import BTreeNode
     from dissect.apfs.objects.keybag import VolumeKeybag
 
 
@@ -151,7 +152,7 @@ class FS(Object):
     def formatted_by(self) -> tuple[str, datetime, int]:
         """Information about the tool that formatted the filesystem."""
         return (
-            self.object.apfs_formatted_by.id.decode().split("\x00", 1)[0],
+            self.object.apfs_formatted_by.id.split(b"\x00", 1)[0].decode(),
             from_unix(self.object.apfs_formatted_by.timestamp),
             self.object.apfs_formatted_by.last_xid,
         )
@@ -166,7 +167,7 @@ class FS(Object):
 
             result.append(
                 (
-                    entry.id.decode().split("\x00", 1)[0],
+                    entry.id.split(b"\x00", 1)[0].decode(),
                     from_unix(entry.timestamp),
                     entry.last_xid,
                 )
@@ -224,7 +225,7 @@ class FS(Object):
             raise Error("No VEK found for this volume")
 
         for kek in self.keybag.keks():
-            if uuid is not None and str(kek.uuid) != uuid:
+            if uuid is not None and str(kek.uuid) != str(uuid):
                 continue
 
             if not kek.verify():
@@ -245,7 +246,7 @@ class FS(Object):
         """Create a new cursor for the volume's root B-tree."""
         return Cursor(self.root_tree, self.omap, self.object.apfs_root_tree_oid if self.is_sealed else 0, self.xid)
 
-    def _cursor_state(self, oid: int) -> Any:
+    def _cursor_state(self, oid: int) -> tuple[BTreeNode, int, list[tuple[BTreeNode, int]]]:
         """Precompute the cursor state for a given object ID.
 
         Args:
@@ -308,6 +309,7 @@ class FS(Object):
 
         Args:
             oid: The object ID of the inode to retrieve.
+            sibling_id: The sibling ID of the inode to retrieve, if applicable.
         """
         if isinstance(oid, str):
             if ":" not in oid:
@@ -321,12 +323,10 @@ class FS(Object):
 
         for key, value in cursor.walk():
             oid, type = parse_fs_object_key(key)
-            if type != c_apfs.APFS_TYPE.INODE:
-                continue
-
-            inode = self.inode(oid)
-            inode._inode_raw = value
-            yield inode
+            if type == c_apfs.APFS_TYPE.INODE:
+                inode = self.inode(oid)
+                inode._inode_raw = value
+                yield inode
 
     def get(self, path: str | int | DirectoryEntry, node: INode | None = None) -> INode:
         """Get an inode by its path, object ID, or directory entry.
@@ -406,6 +406,7 @@ class INode:
     Args:
         volume: Parent APFS volume.
         oid: The object ID of the inode.
+        sibling_id: The sibling ID of the inode, if applicable.
     """
 
     def __init__(self, volume: FS, oid: int, sibling_id: int | None = None):
@@ -476,10 +477,7 @@ class INode:
     def parents(self) -> Iterator[INode]:
         """Iterate over the parent inodes of this inode, up to the root."""
         obj = self
-        while True:
-            if obj.parent is obj:
-                break
-
+        while obj.parent is not obj:
             obj = obj.parent
             yield obj
 
@@ -607,7 +605,7 @@ class INode:
 
     @cached_property
     def sibling_link(self) -> tuple[int, str] | None:
-        """The sibling link (``parent_id``, ``name`` tuple) of this inode, if available."""
+        """The sibling link (``parent_id``, ``name``) tuple of this inode, if available."""
         if self.sibling_id is not None:
             for _, key, value in self.volume._records(self.oid, c_apfs.APFS_TYPE.SIBLING_LINK):
                 if c_apfs.j_sibling_key(key).sibling_id == self.sibling_id:
@@ -637,7 +635,7 @@ class INode:
     def path(self) -> str:
         """The full path of this inode, if available."""
         parts = [self.name or f"<unlinked:{self.oid}>"]
-        parts.extend(parent.name or f"<unlinked:{self.oid}>" for parent in self.parents)
+        parts.extend(parent.name or f"<unlinked:{parent.oid}>" for parent in self.parents)
 
         return "/" + "/".join(parts[::-1])
 
@@ -689,7 +687,7 @@ class INode:
 
         return self.xattr[c_apfs.SYMLINK_EA_NAME].open().read().decode().rstrip("\x00")
 
-    def open(self) -> FileStream:
+    def open(self) -> BufferedStream | DecmpfsStream | FileStream:
         """Open a stream for reading the inode data."""
         if self.is_compressed():
             return DecmpfsStream(self)

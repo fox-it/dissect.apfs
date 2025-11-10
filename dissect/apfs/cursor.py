@@ -84,7 +84,7 @@ class Cursor:
     def next(self) -> bool:
         """Move the cursor to the next item in the B-Tree."""
         if self._node.is_nonleaf:
-            # Treat as if we were at the first key in a leaf node
+            # Treat as if we were at the first key
             self.first()
             return self._node.nkeys != 0
 
@@ -112,7 +112,9 @@ class Cursor:
     def prev(self) -> bool:
         """Move the cursor to the previous item in the B-Tree."""
         if self._node.is_nonleaf:
-            raise ValueError("Cannot call prev() on a non-leaf node")
+            # Treat as if we were at the last key
+            self.last()
+            return self._node.nkeys != 0
 
         if self._idx - 1 >= 0:
             self._idx -= 1
@@ -138,7 +140,7 @@ class Cursor:
 
         return True
 
-    def push(self) -> None:
+    def push(self) -> Self:
         """Push down to the child node at the current index."""
         child_node = self.btree._node_child(self._node, self._idx, self.omap, self.oid, self.xid)
 
@@ -148,7 +150,7 @@ class Cursor:
 
         return self
 
-    def pop(self) -> None:
+    def pop(self) -> Self:
         """Pop back to the parent node."""
         if not self._stack:
             raise IndexError("Cannot pop from an empty stack")

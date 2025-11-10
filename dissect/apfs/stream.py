@@ -29,6 +29,11 @@ class FileStream(AlignedStream):
         self.volume = volume
         self.oid = oid
 
+        if self.volume.is_sealed:
+            self._cursor = Cursor(self.volume.fext_tree)
+        else:
+            self._cursor = self.volume.cursor()
+
         super().__init__(size, self.volume.container.block_size)
 
     def _lookup(self, offset: int) -> tuple[int, int, int, int]:
@@ -38,8 +43,7 @@ class FileStream(AlignedStream):
         return self._lookup_normal(offset)
 
     def _lookup_normal(self, offset: int) -> tuple[int, int, int, int]:
-        cursor = self.volume.cursor()
-        cursor.search(
+        self._cursor.reset().search(
             (
                 (self.oid, c_apfs.APFS_TYPE.FILE_EXTENT.value),
                 offset,
@@ -47,14 +51,14 @@ class FileStream(AlignedStream):
             cmp=cmp_fs_extent,
         )
 
-        key = c_apfs.j_file_extent_key(cursor.key())
+        key = c_apfs.j_file_extent_key(self._cursor.key())
         oid = key.hdr.obj_id_and_type & c_apfs.OBJ_ID_MASK
         type = (key.hdr.obj_id_and_type & c_apfs.OBJ_TYPE_MASK) >> c_apfs.OBJ_TYPE_SHIFT
 
         if oid != self.oid or type != c_apfs.APFS_TYPE.FILE_EXTENT or key.logical_addr > offset:
             raise Error(f"Could not find file extent for {self.oid} at offset {offset}")
 
-        value = c_apfs.j_file_extent_val(cursor.value())
+        value = c_apfs.j_file_extent_val(self._cursor.value())
 
         return (
             key.logical_addr,
@@ -64,14 +68,13 @@ class FileStream(AlignedStream):
         )
 
     def _lookup_sealed(self, offset: int) -> tuple[int, int, int, int]:
-        cursor = Cursor(self.volume.fext_tree)
-        cursor.search((self.oid, offset), cmp=cmp_fext)
+        self._cursor.reset().search((self.oid, offset), cmp=cmp_fext)
 
-        key = c_apfs.fext_tree_key(cursor.key())
+        key = c_apfs.fext_tree_key(self._cursor.key())
         if key.private_id != self.oid or key.logical_addr > offset:
             raise Error(f"Could not find file extent for {self.oid} at offset {offset}")
 
-        value = c_apfs.fext_tree_val(cursor.value())
+        value = c_apfs.fext_tree_val(self._cursor.value())
 
         return (
             key.logical_addr,
@@ -195,7 +198,6 @@ class DecmpfsStream(AlignedStream):
 
             result.append(chunk)
 
-            # TODO: test with bigger files
             offset += self.align
             length -= min(self.align, length)
             block += 1

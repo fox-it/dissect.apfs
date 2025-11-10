@@ -1,6 +1,6 @@
 # dissect.apfs
 
-A Dissect module implementing a parser for the APFS file system, a commonly used Apple filesystem. For more
+A Dissect module implementing a parser for the APFS file system, a commonly used Apple file system. For more
 information, please see [the documentation](https://docs.dissect.tools/en/latest/projects/dissect.apfs/index.html).
 
 ## Requirements

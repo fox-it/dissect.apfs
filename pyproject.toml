@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "dissect.apfs"
-description = "A Dissect module implementing a parser for the APFS file system, a commonly used Apple filesystem"
+description = "A Dissect module implementing a parser for the APFS file system, a commonly used Apple file system"
 readme = "README.md"
 requires-python = ">=3.10.0"
 license = "AGPL-3.0-or-later"
