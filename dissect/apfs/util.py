@@ -108,7 +108,7 @@ _J_DREC_LEN_MASK = c_apfs.J_DREC_LEN_MASK
 def cmp_fs_dir_hash(key: tuple[tuple[int, int], int, bytes], other: bytes) -> Literal[-1, 0, 1]:
     """Comparison function for FS directory entries."""
     # Slightly more unreadable but faster than parsing a struct
-    obj_id_and_type, name_len_hash, name = key
+    obj_id_and_type, name_hash, name = key
 
     # First compare the j_key portion
     if (res := cmp_fs(obj_id_and_type, other[:8])) != 0:
@@ -116,8 +116,14 @@ def cmp_fs_dir_hash(key: tuple[tuple[int, int], int, bytes], other: bytes) -> Li
 
     # Then compare the name_len_hash
     (other_name_len_hash,) = _I.unpack_from(other, 8)
-    if (res := (name_len_hash < other_name_len_hash) - (name_len_hash > other_name_len_hash)) != 0:
+    other_hash = other_name_len_hash & c_apfs.J_DREC_HASH_MASK
+
+    if (res := (name_hash < other_hash) - (name_hash > other_hash)) != 0:
         return res
+
+    if name is None:
+        # Special case for searching without a name
+        return 0
 
     # Finally compare the name
     other_name = other[12 : 12 + (other_name_len_hash & _J_DREC_LEN_MASK)]

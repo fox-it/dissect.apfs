@@ -43,6 +43,17 @@ def _assert_apfs_content(volume: FS) -> None:
     assert node.is_file()
     assert node.open().read() == b""
 
+    # Test case sensitivity
+    if volume.is_case_insensitive:
+        node = volume.get("EMPTY")
+        assert node.name == "empty"
+        assert node.path == "/root/empty"
+        assert node.is_file()
+        assert node.open().read() == b""
+    else:
+        with pytest.raises(FileNotFoundError):
+            volume.get("EMPTY")
+
     # Directory
     node = volume.get("dir")
     assert node.name == "dir"

@@ -646,24 +646,51 @@ class INode:
 
     def get(self, name: str) -> DirectoryEntry:
         """Get a directory entry by name."""
-        if not self.volume.is_case_insensitive or self.volume.is_normalization_insensitive:
+        if not self.volume.is_case_insensitive and not self.volume.is_normalization_insensitive:
             for entry in self.iterdir():
                 if entry.name == name:
                     return entry
 
-        name_len_and_hash, name_buf = _make_dir_hash(name, self.volume.is_case_insensitive)
+        # Length is not used in the key comparison
+        name_hash = (
+            _hash_filename(name, self.volume.is_case_insensitive) << c_apfs.J_DREC_HASH_SHIFT
+        ) & c_apfs.J_DREC_HASH_MASK
+        # If the volume is case sensitive, we can use the name in the search key for an exact match
+        # Otherwise, we set it to None to ignore it in the comparison
+        name_search = None if self.volume.is_case_insensitive else (name.encode() + b"\x00")
 
         cursor = self.volume.cursor()
         try:
             cursor.search(
-                ((self.oid, c_apfs.APFS_TYPE.DIR_REC.value), name_len_and_hash, name_buf),
+                ((self.oid, c_apfs.APFS_TYPE.DIR_REC.value), name_hash, name_search),
                 exact=True,
                 cmp=cmp_fs_dir_hash,
             )
         except KeyError:
             raise FileNotFoundError(f"File not found: {name}")
 
-        return DirectoryEntry(self.volume, cursor.key(), cursor.value())
+        if not self.volume.is_case_insensitive:
+            # On case sensitive volumes, the search is already exact, so no need to check further
+            return DirectoryEntry(self.volume, cursor.key(), cursor.value())
+
+        lname = name.casefold()
+        while True:
+            try:
+                dirent = DirectoryEntry(self.volume, cursor.key(), cursor.value())
+            except Exception:
+                raise FileNotFoundError(f"File not found: {name}")
+
+            # To deal with the possibility of hash collisions, verify the name matches
+            oid = dirent.key.hdr.obj_id_and_type & c_apfs.OBJ_ID_MASK
+            type = (dirent.key.hdr.obj_id_and_type & c_apfs.OBJ_TYPE_MASK) >> c_apfs.OBJ_TYPE_SHIFT
+            if oid != self.oid or type != c_apfs.APFS_TYPE.DIR_REC:
+                raise FileNotFoundError(f"File not found: {name}")
+
+            if lname == dirent.name.casefold():
+                return dirent
+
+            if not cursor.next():
+                raise FileNotFoundError(f"File not found: {name}")
 
     def listdir(self) -> dict[str, DirectoryEntry]:
         """List the directory entries in this inode."""
@@ -858,16 +885,4 @@ def _hash_filename(name: str, casefold: bool) -> int:
     normalized = unicodedata.normalize("NFD", name)
     if casefold:
         normalized = normalized.casefold()
-
     return crc32c(normalized.encode("utf-32-le")) ^ 0xFFFFFFFF
-
-
-def _make_dir_hash(name: str, casefold: bool) -> tuple[int, bytes]:
-    """Make a directory entry hash and name buffer."""
-    hash = _hash_filename(name, casefold)
-    name_buf = name.encode() + b"\x00"
-
-    return (
-        ((hash << c_apfs.J_DREC_HASH_SHIFT) & c_apfs.J_DREC_HASH_MASK) | (len(name_buf) & c_apfs.J_DREC_LEN_MASK),
-        name_buf,
-    )
