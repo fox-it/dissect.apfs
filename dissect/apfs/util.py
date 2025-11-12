@@ -105,7 +105,7 @@ _I = struct.Struct("<I")
 _J_DREC_LEN_MASK = c_apfs.J_DREC_LEN_MASK
 
 
-def cmp_fs_dir_hash(key: tuple[tuple[int, int], int, bytes], other: bytes) -> Literal[-1, 0, 1]:
+def cmp_fs_dir_hash(key: tuple[tuple[int, int], int, bytes | None], other: bytes) -> Literal[-1, 0, 1]:
     """Comparison function for FS directory entries."""
     # Slightly more unreadable but faster than parsing a struct
     obj_id_and_type, name_hash, name = key
