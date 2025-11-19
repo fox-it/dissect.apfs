@@ -27,7 +27,7 @@ classifiers = [
 dependencies = [
     "dissect.cstruct>=4,<5",
     "dissect.fve>=4.2,<5",
-    "dissect.util>=3.23.dev,<4",  # TODO: update on release!
+    "dissect.util>=3.23,<4",
     "asn1crypto",
     "pycryptodome",
 ]
