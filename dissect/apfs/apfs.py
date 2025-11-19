@@ -24,10 +24,8 @@ class APFS:
         self.fh.seek(0)
 
         self.sb = NxSuperblock.from_block(self, 0, self.fh.read(c_apfs.NX_DEFAULT_BLOCK_SIZE))
-        self.sb = sorted(
-            [self.sb] + [obj for obj in self.sb.checkpoint_objects if isinstance(obj, NxSuperblock)],
-            key=lambda obj: obj.xid,
-        )[-1]
+        self.sbs = [self.sb] + [obj for obj in self.sb.checkpoint_objects if isinstance(obj, NxSuperblock)]
+        self.sb = sorted(self.sbs, key=lambda obj: obj.xid)[-1]
 
     @property
     def block_size(self) -> int:

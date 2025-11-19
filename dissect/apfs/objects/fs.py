@@ -19,7 +19,7 @@ from dissect.apfs.objects.base import Object
 from dissect.apfs.objects.btree import BTree
 from dissect.apfs.objects.omap import ObjectMap
 from dissect.apfs.stream import DecmpfsStream, FileStream
-from dissect.apfs.util import cmp_fs, cmp_fs_dir_hash, parse_fs_object_key
+from dissect.apfs.util import cmp_fs, cmp_fs_dir, cmp_fs_dir_hash, parse_fs_object_key
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -647,25 +647,25 @@ class INode:
     def get(self, name: str) -> DirectoryEntry:
         """Get a directory entry by name."""
         if not self.volume.is_case_insensitive and not self.volume.is_normalization_insensitive:
-            for entry in self.iterdir():
-                if entry.name == name:
-                    return entry
+            # APFS beta's didn't have normalization insensitivity, so when the filesystem is case sensitive
+            # we can do a simple exact match
+            key = ((self.oid, c_apfs.APFS_TYPE.DIR_REC.value), name.encode() + b"\x00")
+            cmp = cmp_fs_dir
+        else:
+            # Length is not used in the key comparison
+            name_hash = (
+                _hash_filename(name, self.volume.is_case_insensitive) << c_apfs.J_DREC_HASH_SHIFT
+            ) & c_apfs.J_DREC_HASH_MASK
+            # If the volume is case sensitive, we can use the name in the search key for an exact match
+            # Otherwise, we set it to None to ignore it in the comparison
+            name_search = None if self.volume.is_case_insensitive else (name.encode() + b"\x00")
 
-        # Length is not used in the key comparison
-        name_hash = (
-            _hash_filename(name, self.volume.is_case_insensitive) << c_apfs.J_DREC_HASH_SHIFT
-        ) & c_apfs.J_DREC_HASH_MASK
-        # If the volume is case sensitive, we can use the name in the search key for an exact match
-        # Otherwise, we set it to None to ignore it in the comparison
-        name_search = None if self.volume.is_case_insensitive else (name.encode() + b"\x00")
+            key = ((self.oid, c_apfs.APFS_TYPE.DIR_REC.value), name_hash, name_search)
+            cmp = cmp_fs_dir_hash
 
         cursor = self.volume.cursor()
         try:
-            cursor.search(
-                ((self.oid, c_apfs.APFS_TYPE.DIR_REC.value), name_hash, name_search),
-                exact=True,
-                cmp=cmp_fs_dir_hash,
-            )
+            cursor.search(key, exact=True, cmp=cmp)
         except KeyError:
             raise FileNotFoundError(f"File not found: {name}")
 
@@ -737,9 +737,7 @@ class DirectoryEntry:
 
     def __init__(self, volume: FS, key: bytes, value: bytes):
         self.volume = volume
-        if self.volume.incompatible_features & (
-            c_apfs.APFS_INCOMPAT.CASE_INSENSITIVE | c_apfs.APFS_INCOMPAT.NORMALIZATION_INSENSITIVE
-        ):
+        if self.volume.is_case_insensitive or self.volume.is_normalization_insensitive:
             self.key = c_apfs.j_drec_hashed_key(key)
         else:
             self.key = c_apfs.j_drec_key(key)

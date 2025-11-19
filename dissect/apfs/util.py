@@ -101,6 +101,24 @@ def cmp_fext(key: tuple[int, int], other: bytes) -> Literal[-1, 0, 1]:
     return (logical_addr < other_logical_addr) - (logical_addr > other_logical_addr)
 
 
+_H = struct.Struct("<H")
+
+
+def cmp_fs_dir(key: tuple[tuple[int, int], bytes], other: bytes) -> Literal[-1, 0, 1]:
+    """Comparison function for FS directory entries."""
+    # Slightly more unreadable but faster than parsing a struct
+    obj_id_and_type, name = key
+
+    # First compare the j_key portion
+    if (res := cmp_fs(obj_id_and_type, other[:8])) != 0:
+        return res
+
+    # Then compare the name
+    (other_name_len,) = _H.unpack_from(other, 8)
+    other_name = other[10 : 10 + (other_name_len)]
+    return (name < other_name) - (name > other_name)
+
+
 _I = struct.Struct("<I")
 _J_DREC_LEN_MASK = c_apfs.J_DREC_LEN_MASK
 
@@ -121,8 +139,8 @@ def cmp_fs_dir_hash(key: tuple[tuple[int, int], int, bytes | None], other: bytes
     if (res := (name_hash < other_hash) - (name_hash > other_hash)) != 0:
         return res
 
+    # Special case for searching without a name
     if name is None:
-        # Special case for searching without a name
         return 0
 
     # Finally compare the name

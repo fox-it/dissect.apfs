@@ -14,7 +14,7 @@ if TYPE_CHECKING:
     from dissect.apfs.objects.fs import FS
 
 
-def _assert_apfs_content(volume: FS) -> None:
+def _assert_apfs_content(volume: FS, beta: bool) -> None:
     # Root directory
     node = volume.get("/")
     assert node.name == "root"
@@ -61,20 +61,33 @@ def _assert_apfs_content(volume: FS) -> None:
     assert node.is_dir()
     assert all(
         name in sorted(node.listdir())
-        for name in [
-            "compressed-lzfse-fork",
-            "compressed-lzfse-xattr",
-            "compressed-lzvn-fork",
-            "compressed-lzvn-xattr",
-            "compressed-zlib-fork",
-            "compressed-zlib-xattr",
-            "fifo",
-            "file",
-            "resourcefork",
-            "xattr-dir",
-            "xattr-large",
-            "xattr-small",
-        ]
+        for name in (
+            [
+                "compressed-zlib-fork",
+                "compressed-zlib-xattr",
+                "fifo",
+                "file",
+                "resourcefork",
+                "xattr-dir",
+                "xattr-large",
+                "xattr-small",
+            ]
+            if beta
+            else [
+                "compressed-lzfse-fork",
+                "compressed-lzfse-xattr",
+                "compressed-lzvn-fork",
+                "compressed-lzvn-xattr",
+                "compressed-zlib-fork",
+                "compressed-zlib-xattr",
+                "fifo",
+                "file",
+                "resourcefork",
+                "xattr-dir",
+                "xattr-large",
+                "xattr-small",
+            ]
+        )
     )
 
     # Regular file
@@ -159,7 +172,9 @@ def _assert_apfs_content(volume: FS) -> None:
     assert node.is_file()
     assert (
         hashlib.sha256(node.xattr["xattr-large"].open().read()).hexdigest()
-        == "a11c957142c3fd8ebf2bee1ed0cf184a246033a3874d060acd28c319b323466e"
+        == "dd4e6730520932767ec0a9e33fe19c4ce24399d6eba4ff62f13013c9ed30ef87"
+        if beta
+        else "a11c957142c3fd8ebf2bee1ed0cf184a246033a3874d060acd28c319b323466e"
     )
 
     # Compressed file method 3 (ZLIB-XATTR)
@@ -182,47 +197,48 @@ def _assert_apfs_content(volume: FS) -> None:
         == "5f46d97f947137dcf974fc19914c547acd18fcdb25124c846c1100f8b3fbca5f"
     )
 
-    # Compressed file method 7 (LZVN-XATTR)
-    node = volume.get("dir/compressed-lzvn-xattr")
-    assert node.name == "compressed-lzvn-xattr"
-    assert node.is_file()
-    assert node.is_compressed()
-    assert (
-        node.open().read()
-        == b"Compressed data in xattr aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n"  # noqa: E501
-    )
+    if not beta:
+        # Compressed file method 7 (LZVN-XATTR)
+        node = volume.get("dir/compressed-lzvn-xattr")
+        assert node.name == "compressed-lzvn-xattr"
+        assert node.is_file()
+        assert node.is_compressed()
+        assert (
+            node.open().read()
+            == b"Compressed data in xattr aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n"  # noqa: E501
+        )
 
-    # Compressed file method 8 (LZVN-FORK)
-    node = volume.get("dir/compressed-lzvn-fork")
-    assert node.name == "compressed-lzvn-fork"
-    assert node.is_file()
-    assert node.is_compressed()
-    assert (
-        hashlib.sha256(node.open().read()).hexdigest()
-        == "5f46d97f947137dcf974fc19914c547acd18fcdb25124c846c1100f8b3fbca5f"
-    )
+        # Compressed file method 8 (LZVN-FORK)
+        node = volume.get("dir/compressed-lzvn-fork")
+        assert node.name == "compressed-lzvn-fork"
+        assert node.is_file()
+        assert node.is_compressed()
+        assert (
+            hashlib.sha256(node.open().read()).hexdigest()
+            == "5f46d97f947137dcf974fc19914c547acd18fcdb25124c846c1100f8b3fbca5f"
+        )
 
-    # Compressed file method 11 (LZFSE-XATTR)
-    node = volume.get("dir/compressed-lzfse-xattr")
-    assert node.name == "compressed-lzfse-xattr"
-    assert node.is_file()
-    assert node.is_compressed()
-    assert (
-        node.open().read()
-        == b"Compressed data in xattr aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n"  # noqa: E501
-    )
+        # Compressed file method 11 (LZFSE-XATTR)
+        node = volume.get("dir/compressed-lzfse-xattr")
+        assert node.name == "compressed-lzfse-xattr"
+        assert node.is_file()
+        assert node.is_compressed()
+        assert (
+            node.open().read()
+            == b"Compressed data in xattr aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n"  # noqa: E501
+        )
 
-    # Compressed file method 12 (LZFSE-FORK)
-    node = volume.get("dir/compressed-lzfse-fork")
-    assert node.name == "compressed-lzfse-fork"
-    assert node.is_file()
-    assert node.is_compressed()
-    assert (
-        hashlib.sha256(node.open().read()).hexdigest()
-        == "5f46d97f947137dcf974fc19914c547acd18fcdb25124c846c1100f8b3fbca5f"
-    )
+        # Compressed file method 12 (LZFSE-FORK)
+        node = volume.get("dir/compressed-lzfse-fork")
+        assert node.name == "compressed-lzfse-fork"
+        assert node.is_file()
+        assert node.is_compressed()
+        assert (
+            hashlib.sha256(node.open().read()).hexdigest()
+            == "5f46d97f947137dcf974fc19914c547acd18fcdb25124c846c1100f8b3fbca5f"
+        )
 
-    if ".HFS+ Private Directory Data\r" not in volume.get("/").listdir():
+    if ".HFS+ Private Directory Data\r" not in volume.get("/").listdir() and not beta:
         # Special files
         node = volume.get("dir/blockdev")
         assert node.name == "blockdev"
@@ -294,6 +310,20 @@ def _assert_apfs_content(volume: FS) -> None:
             "password",
             id="jfs-encrypted",
         ),
+        pytest.param(
+            "_data/case_insensitive_beta.bin.gz",
+            "Case Insensitive (beta)",
+            c_apfs.APFS_INCOMPAT.CASE_INSENSITIVE,
+            None,
+            id="case-insensitive-beta",
+        ),
+        pytest.param(
+            "_data/case_sensitive_beta.bin.gz",
+            "Case Sensitive (beta)",
+            c_apfs.APFS_INCOMPAT(0),
+            None,
+            id="case-sensitive-beta",
+        ),
     ],
 )
 def test_apfs(path: str, name: str, features: c_apfs.APFS_INCOMPAT, password: str | None) -> None:
@@ -310,7 +340,7 @@ def test_apfs(path: str, name: str, features: c_apfs.APFS_INCOMPAT, password: st
             assert volume.is_encrypted
             volume.unlock(password)
 
-        _assert_apfs_content(volume)
+        _assert_apfs_content(volume, "(beta)" in name)
 
 
 def test_snapshots() -> None:
