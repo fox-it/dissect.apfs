@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from dissect.apfs.apfs import APFS
+from dissect.apfs.apfs import APFS, log
 from dissect.apfs.c_apfs import c_apfs
 from tests.conftest import absolute_path
 
@@ -357,3 +357,15 @@ def test_snapshots() -> None:
         for i, snapshot in enumerate(volume.snapshots):
             assert snapshot.name == f"Snapshot {i}"
             assert snapshot.open().get("file").open().read() == f"Snapshot {i}\n".encode()
+
+
+def test_corrupt_checkpoints(caplog: pytest.LogCaptureFixture) -> None:
+    """Test APFS volumes with corrupt checkpoints."""
+    with gzip.open(absolute_path("_data/corrupt.bin.gz"), "rb") as fh, caplog.at_level("DEBUG", log.name):
+        container = APFS(fh)
+
+        assert container.sb.xid == 302
+        assert len(container.volumes) == 1
+
+    assert caplog.messages[0] == "Skipping superblock xid=304: invalid OMAP"
+    assert caplog.messages[1] == "Skipping superblock xid=303: Invalid nx_superblock checksum"
