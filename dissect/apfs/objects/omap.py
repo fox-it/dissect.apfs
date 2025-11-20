@@ -20,6 +20,15 @@ class ObjectMap(Object):
 
         self.lookup = lru_cache(128)(self.lookup)
 
+    def is_valid(self) -> bool:
+        return (
+            super().is_valid()
+            and self.type == c_apfs.OBJECT_TYPE.OMAP
+            and self.subtype == 0
+            and self.is_physical
+            and self.oid == self.address
+        )
+
     @cached_property
     def btree(self) -> BTree:
         """The B-tree of the object map."""

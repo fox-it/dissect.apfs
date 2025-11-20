@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import logging
+import os
 from typing import TYPE_CHECKING, BinaryIO
 
 from dissect.apfs.c_apfs import c_apfs
@@ -10,6 +12,9 @@ if TYPE_CHECKING:
 
     from dissect.apfs.objects.fs import FS
     from dissect.apfs.objects.keybag import ContainerKeybag
+
+log = logging.getLogger(__name__)
+log.setLevel(os.getenv("DISSECT_LOG_APFS", "CRITICAL"))
 
 
 class APFS:
@@ -24,8 +29,29 @@ class APFS:
         self.fh.seek(0)
 
         self.sb = NxSuperblock.from_block(self, 0, self.fh.read(c_apfs.NX_DEFAULT_BLOCK_SIZE))
-        self.sbs = [self.sb] + [obj for obj in self.sb.checkpoint_objects if isinstance(obj, NxSuperblock)]
-        self.sb = sorted(self.sbs, key=lambda obj: obj.xid)[-1]
+        self.sb.check()
+
+        self.sbs = sorted(
+            [obj for obj in self.sb.checkpoint_objects if isinstance(obj, NxSuperblock)],
+            key=lambda obj: obj.xid,
+            reverse=True,
+        )
+
+        # TODO: Do more accurate checkpoint traversal
+        for sb in self.sbs:
+            try:
+                sb.check()
+                sb.compare(self.sb)
+            except Exception as e:
+                log.debug("Skipping superblock xid=%d: %s", sb.xid, e)
+                continue
+
+            if not sb.omap.is_valid():
+                log.debug("Skipping superblock xid=%d: invalid OMAP", sb.xid)
+                continue
+
+            self.sb = sb
+            break
 
     @property
     def block_size(self) -> int:
