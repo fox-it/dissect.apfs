@@ -29,14 +29,40 @@ class NxSuperblock(Object):
     __struct__ = c_apfs.nx_superblock
     object: c_apfs.nx_superblock
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    def check(self) -> None:
+        """Check the validity of the superblock."""
+        if not self.is_valid():
+            raise Error("Invalid nx_superblock checksum")
+
+        if self.type != c_apfs.OBJECT_TYPE.NX_SUPERBLOCK:
+            raise Error("Invalid nx_superblock type")
+
+        if not self.is_ephemeral:
+            raise Error("Invalid nx_superblock storage type")
 
         if self.object.nx_magic.to_bytes(4, "big") != c_apfs.NX_MAGIC:
             raise Error(
                 "Invalid nx_superblock magic "
                 f"(expected {c_apfs.NX_MAGIC!r}, got {self.object.nx_magic.to_bytes(4, 'big')!r})"
             )
+
+    def compare(self, other: NxSuperblock) -> None:
+        """Compare this superblock to another superblock."""
+        if self.header.o_xid < other.header.o_xid:
+            raise Error("Lower xid than other superblock")
+
+        for attr in (
+            "nx_uuid",
+            "nx_fusion_uuid",
+            "nx_block_size",
+            "nx_block_count",
+            "nx_xp_desc_blocks",
+            "nx_xp_data_blocks",
+            "nx_xp_desc_base",
+            "nx_xp_data_base",
+        ):
+            if getattr(self.object, attr) != getattr(other.object, attr):
+                raise Error(f"Mismatch on {attr}")
 
     @cached_property
     def block_size(self) -> int:
@@ -66,14 +92,20 @@ class NxSuperblock(Object):
     @cached_property
     def checkpoint_objects(self) -> list[CheckpointMap | NxSuperblock]:
         """All checkpoint objects in the container."""
-        return list(_read_checkpoint_objects(self.container, self.object.nx_xp_desc_base, self.object.nx_xp_desc_len))
+        # TODO: Rework this a bit to be more accurate
+        return list(
+            _read_checkpoint_objects(self.container, self.object.nx_xp_desc_base, self.object.nx_xp_desc_blocks)
+        )
 
     @cached_property
     def ephemeral_objects(self) -> dict[int, Object]:
         """All ephemeral objects in the container."""
+        # TODO: I don't think this is correct
         return {
             obj.oid: obj
-            for obj in _read_checkpoint_objects(self.container, self.object.nx_xp_data_base, self.object.nx_xp_data_len)
+            for obj in _read_checkpoint_objects(
+                self.container, self.object.nx_xp_data_base, self.object.nx_xp_data_blocks
+            )
         }
 
     @cached_property
