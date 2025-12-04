@@ -792,27 +792,27 @@ class DirectoryEntry:
     @cached_property
     def type(self) -> int:
         """The file type of this directory entry."""
-        return self.value.flags & c_apfs.DREC_TYPE_MASK << 12
+        return (self.value.flags & c_apfs.DREC_TYPE_MASK) << 12
 
     def is_dir(self) -> bool:
         """Return whether this directory entry is a directory."""
-        return stat.S_ISDIR(self.type << 12)
+        return stat.S_ISDIR(self.type)
 
     def is_file(self) -> bool:
         """Return whether this directory entry is a regular file."""
-        return stat.S_ISREG(self.type << 12)
+        return stat.S_ISREG(self.type)
 
     def is_symlink(self) -> bool:
         """Return whether this directory entry is a symbolic link."""
-        return stat.S_ISLNK(self.type << 12)
+        return stat.S_ISLNK(self.type)
 
     def is_block_device(self) -> bool:
         """Return whether this directory entry is a block device."""
-        return stat.S_ISBLK(self.type << 12)
+        return stat.S_ISBLK(self.type)
 
     def is_character_device(self) -> bool:
         """Return whether this directory entry is a character device."""
-        return stat.S_ISCHR(self.type << 12)
+        return stat.S_ISCHR(self.type)
 
     def is_device(self) -> bool:
         """Return whether this directory entry is a device (block or character)."""
@@ -820,15 +820,15 @@ class DirectoryEntry:
 
     def is_fifo(self) -> bool:
         """Return whether this directory entry is a FIFO."""
-        return stat.S_ISFIFO(self.type << 12)
+        return stat.S_ISFIFO(self.type)
 
     def is_socket(self) -> bool:
         """Return whether this directory entry is a socket."""
-        return stat.S_ISSOCK(self.type << 12)
+        return stat.S_ISSOCK(self.type)
 
     def is_whiteout(self) -> bool:
         """Return whether this directory entry is a whiteout."""
-        return stat.S_ISWHT(self.type << 12)
+        return stat.S_ISWHT(self.type)
 
 
 class XAttr:
