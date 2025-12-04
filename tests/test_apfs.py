@@ -36,6 +36,11 @@ def _assert_apfs_content(volume: FS, beta: bool) -> None:
         ]
     )
 
+    # Test direntry parsing
+    assert node.listdir()["dir"].is_dir()
+    assert node.listdir()["hardlink"].is_file()
+    assert node.listdir()["symlink-dir"].is_symlink()
+
     # Empty file
     node = volume.get("empty")
     assert node.name == "empty"
@@ -240,6 +245,9 @@ def _assert_apfs_content(volume: FS, beta: bool) -> None:
 
     if ".HFS+ Private Directory Data\r" not in volume.get("/").listdir() and not beta:
         # Special files
+        dirents = volume.get("dir").listdir()
+        assert dirents["blockdev"].is_block_device()
+
         node = volume.get("dir/blockdev")
         assert node.name == "blockdev"
         assert node.is_block_device()
@@ -263,6 +271,8 @@ def _assert_apfs_content(volume: FS, beta: bool) -> None:
             "chardev-svr4",
             "chardev-ultrix",
         ]:
+            assert dirents[name].is_character_device()
+
             node = volume.get(f"dir/{name}")
             assert node.name == name
             assert node.is_character_device()
