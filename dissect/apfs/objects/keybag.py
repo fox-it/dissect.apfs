@@ -292,7 +292,6 @@ def _create_cipher(key: bytes, iv: bytes = b"\x00" * 16, mode: str = "cbc") -> A
 
     Dynamic based on the available crypto module.
     """
-
     if HAS_PYSTANDALONE:
         key_size = len(key)
         if key_size not in (32, 24, 16):
