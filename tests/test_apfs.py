@@ -3,6 +3,7 @@ from __future__ import annotations
 import gzip
 import hashlib
 from typing import TYPE_CHECKING
+from unittest.mock import patch
 
 import pytest
 
@@ -379,3 +380,27 @@ def test_corrupt_checkpoints(caplog: pytest.LogCaptureFixture) -> None:
 
     assert caplog.messages[0] == "Skipping superblock xid=304: invalid OMAP"
     assert caplog.messages[1] == "Skipping superblock xid=303: Invalid nx_superblock checksum"
+
+
+def test_large_extents() -> None:
+    """Test APFS volumes with large extents."""
+    with gzip.open(absolute_path("_data/large.bin.gz"), "rb") as fh:
+        container = APFS(fh)
+        assert len(container.volumes) == 1
+
+        volume = container.volumes[0]
+        assert volume.name == "Large"
+
+        node = volume.get("yomomma.bin")
+        assert node.size == 512 * 1024 * 1024
+
+        fh = node.open()
+
+        # First extent is 128MiB
+        assert fh._lookup(0) == (0, 1070, 128 * 1024 * 1024, 0)
+
+        with patch.object(volume.container, "_read_block", wraps=volume.container._read_block) as mock_read_block:
+            assert fh.read(512) == b"\x67" * 512
+
+            # Check that we only read one block, not the entire 128MiB extent
+            mock_read_block.assert_called_once_with(1070, 1)

@@ -88,26 +88,30 @@ class FileStream(AlignedStream):
 
         while length:
             logical_address, physical_address, extent_length, crypto_id = self._lookup(offset)
-            block = self.volume.container._read_block(physical_address, extent_length // self.align)
+
+            offset_in_extent = offset - logical_address
+            if offset_in_extent >= extent_length:
+                raise Error(
+                    f"Offset {offset:#x} is out of bounds for extent ({logical_address:#x}, {extent_length:#x})"
+                )
+
+            block_in_extent = offset_in_extent // self.align
+            read_length = min(extent_length - offset_in_extent, length)
+            block = self.volume.container._read_block(physical_address + block_in_extent, read_length // self.align)
 
             if self.volume.is_encrypted:
                 if not self.volume._cipher:
                     raise Error("Volume is encrypted, unlock it first")
 
                 if self.volume.is_onekey:
-                    block = self.volume._cipher.decrypt(block, crypto_id * self.volume.container.sectors_per_block)
+                    sector = (crypto_id + block_in_extent) * self.volume.container.sectors_per_block
+                    block = self.volume._cipher.decrypt(block, sector)
                 else:
                     raise Error("Multi-key encryption is not supported yet")
 
-            if offset_in_extent := offset - logical_address:
-                block = block[offset_in_extent:]
-
-            if length < len(block):
-                block = block[:length]
-
             result.append(block)
-            offset += min(extent_length, length)
-            length -= min(extent_length, length)
+            offset += read_length
+            length -= read_length
 
         return b"".join(result)
 
