@@ -721,7 +721,7 @@ class INode:
 
         if dstream := self.xfields.get(c_apfs.INO_EXT_TYPE.DSTREAM):
             _, dstream = dstream
-            return FileStream(self.volume, self.oid, dstream.size)
+            return FileStream(self.volume, self.private_id, dstream.size)
 
         return BufferedStream(BytesIO(b""), size=0)
 
