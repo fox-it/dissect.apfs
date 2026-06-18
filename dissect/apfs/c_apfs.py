@@ -1656,7 +1656,7 @@ XF_MAP = {
     c_apfs.INO_EXT_TYPE.DOCUMENT_ID: c_apfs.uint32_t,
     c_apfs.INO_EXT_TYPE.PREV_FSIZE: c_apfs.uint64_t,
     c_apfs.INO_EXT_TYPE.DSTREAM: c_apfs.j_dstream,
-    c_apfs.INO_EXT_TYPE.DIR_STATS_KEY: c_apfs.j_dir_stats_val,
+    c_apfs.INO_EXT_TYPE.DIR_STATS_KEY: c_apfs.j_dir_stats_key,
     c_apfs.INO_EXT_TYPE.SPARSE_BYTES: c_apfs.uint64_t,
     c_apfs.INO_EXT_TYPE.RDEV: c_apfs.uint32_t,
 }
