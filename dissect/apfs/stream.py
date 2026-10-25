@@ -97,17 +97,22 @@ class FileStream(AlignedStream):
 
             block_in_extent = offset_in_extent // self.align
             read_length = min(extent_length - offset_in_extent, length)
-            block = self.volume.container._read_block(physical_address + block_in_extent, read_length // self.align)
 
-            if self.volume.is_encrypted:
-                if not self.volume._cipher:
-                    raise Error("Volume is encrypted, unlock it first")
+            if physical_address == 0:
+                # A hole in a sparse file is an extent at physical block 0: it reads as zeros
+                block = bytes(read_length)
+            else:
+                block = self.volume.container._read_block(physical_address + block_in_extent, read_length // self.align)
 
-                if self.volume.is_onekey:
-                    sector = (crypto_id + block_in_extent) * self.volume.container.sectors_per_block
-                    block = self.volume._cipher.decrypt(block, sector)
-                else:
-                    raise Error("Multi-key encryption is not supported yet")
+                if self.volume.is_encrypted:
+                    if not self.volume._cipher:
+                        raise Error("Volume is encrypted, unlock it first")
+
+                    if self.volume.is_onekey:
+                        sector = (crypto_id + block_in_extent) * self.volume.container.sectors_per_block
+                        block = self.volume._cipher.decrypt(block, sector)
+                    else:
+                        raise Error("Multi-key encryption is not supported yet")
 
             result.append(block)
             offset += read_length
