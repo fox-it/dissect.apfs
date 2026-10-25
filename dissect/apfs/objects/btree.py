@@ -160,6 +160,10 @@ class BTree(Object):
             exact: If ``True``, only return if an exact match is found.
             cmp: Comparison function to use. Should return -1, 0, or 1
         """
+        if node.nkeys == 0:
+            # An empty node (such as the root of an empty tree) holds no key to find
+            return -1
+
         lo, hi = 0, node.nkeys - 1
 
         while lo <= hi:
